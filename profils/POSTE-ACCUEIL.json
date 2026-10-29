@@ -1,0 +1,67 @@
+{
+  "profile_name": "POSTE-ACCUEIL",
+  "version": "1.0.0",
+  "validation_date": "2026-09-20",
+  "identity": {
+    "hostname_pattern": "^PC-EXP-\\d{3}$",
+    "admin_account": "adm-experty",
+    "allowed_local_accounts": [
+      "adm-experty",
+      "Administrator",
+      "Administrateur",
+      "Accueil"
+    ]
+  },
+  "hardware": {
+    "min_ram_gb": 8,
+    "min_disk_free_gb": 15,
+    "smart_check_enabled": true,
+    "media_type_check_enabled": true
+  },
+  "system": {
+    "windows_edition": "Windows 11 Pro",
+    "windows_activation_enabled": true,
+    "time_server": "pool.ntp.org",
+    "max_clock_skew_seconds": 60,
+    "max_pending_updates": 3
+  },
+  "security": {
+    "antivirus_required": true,
+    "max_av_signature_age_days": 3,
+    "bitlocker_required": true,
+    "firewall_profiles_active": true
+  },
+  "software": {
+    "required_winget_apps": [
+      "Google.Chrome",
+      "7zip.7zip",
+      "Adobe.Acrobat.Reader.64-bit"
+    ],
+    "forbidden_apps": [
+      "Torrent",
+      "uTorrent",
+      "Steam",
+      "Discord"
+    ],
+    "required_services": [
+      {
+        "name": "wuauserv",
+        "start_type": "Automatic"
+      }
+    ]
+  },
+  "environment": {
+    "numlock_on_boot": true,
+    "show_file_extensions": true,
+    "show_hidden_files": false,
+    "confirm_file_delete": true,
+    "chrome_homepage": "https://www.experty.fr/accueil"
+  },
+  "printer": {
+    "name": "Imprimante-Accueil",
+    "network_path": "\\srv-print\\Imprimante-Accueil"
+  },
+  "logs": {
+    "max_critical_events_24h": 10
+  }
+}
