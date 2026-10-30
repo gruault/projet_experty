@@ -59,28 +59,36 @@ Le système évalue les contrôles sous plusieurs domaines :
 
 ## 5. Guide d'Utilisation
 
-### Lancement
-Exécutez le fichier via Python (de préférence dans un terminal administrateur) :
-```bash
-python main.py
-```
+### Lancement de l'Exécutable
+
+L'application est compilée sous la forme d'un exécutable autonome (ex: `main.exe` ou `experty.exe`) via **PyInstaller**.
+
+Afin de permettre l'exécution correcte des sondes système, des requêtes WMI et des scripts de remédiation :
+
+1. Assurez-vous que les répertoires et fichiers indispensables (`profils/`, `config.ini`) sont présents dans le **même répertoire** que l'exécutable.
+2. Lancez l'application en effectuant un clic droit sur l'exécutable et en choisissant **"Exécuter en tant qu'administrateur"**.
 
 ### Étapes d'une Recette
-1. **Sélection du profil** : Choisissez le profil cible dans la liste déroulante du bandeau supérieur (ex: `POSTE-COMPTABLE.json`).
-2. **Saisie de l'opérateur** : Indiquez le nom du technicien effectuant la recette.
-3. **Lancement** : Cliquez sur **"Lancer la recette"**. Les sondes s'exécutent en arrière-plan et mettent à jour la barre de progression ainsi que les indicateurs d'onglets.
+
+1. **Sélection du profil** : Choisissez le profil cible dans la liste déroulante du bandeau supérieur (ex: `POSTE-COMPTABLE.json`). L'application charge dynamiquement les fichiers JSON présents dans le dossier `profils/`.
+2. **Saisie de l'opérateur** : Indiquez le nom ou l'identifiant du technicien effectuant la recette.
+3. **Lancement de l'audit** : Cliquez sur **"Lancer la recette"**. Les sondes s'exécutent en arrière-plan via un système multithread et mettent à jour en temps réel la barre de progression ainsi que les indicateurs d'onglets.
 4. **Analyse des Écarts** :
-   * Les éléments conformes apparaissent en **Vert**.
-   * Les écarts apparaissent en **Rouge**.
-   * Les éléments indéterminés apparaissent en **Orange**.
+* Les éléments conformes apparaissent en **Vert**.
+* Les écarts ou non-conformités apparaissent en **Rouge**.
+* Les éléments dont l'état est indéterminé apparaissent en **Orange**.
+
+
 5. **Remédiation** :
-   * Sélectionnez un contrôle en écart dans la liste.
-   * Si le mode est **Automatique**, le bouton **"Corriger"** devient disponible.
-   * Cliquez sur **"Corriger"** puis confirmez l'action dans la boîte de dialogue.
-   * La sonde est automatiquement réévaluée après la tentative de correction.
-6. **Génération du PV** :
-   * Une fois le verdict établi (*CONFORME*, *CONFORME AVEC RESERVES* ou *NON CONFORME*), naviguez dans le menu : `Recette` → `Éditer le procès-verbal (PDF)`.
-   * Le document PDF est enregistré dans le dossier `pv_recette/`.
+* Sélectionnez un contrôle en écart dans la liste détaillée.
+* Si le contrôle est éligible à une correction automatisée, le bouton **"Corriger"** devient actif.
+* Cliquez sur **"Corriger"** et confirmez l'action dans la boîte de dialogue contextuelle.
+* La sonde associée est automatiquement réévaluée immédiatement après la tentative de correction.
+
+
+6. **Génération du Procès-Verbal (PV)** :
+* Une fois le verdict global établi (*CONFORME*, *CONFORME AVEC RESERVES* ou *NON CONFORME*), accédez au menu supérieur : `Recette` → `Éditer le procès-verbal (PDF)`.
+* Le rapport PDF officiel est généré et stocké dans le dossier `pv_recette/` créé à la racine de l'exécutable.
 
 ---
 
