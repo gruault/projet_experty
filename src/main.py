@@ -19,7 +19,9 @@ from fpdf import FPDF
 # CONFIGURATION & PROFILES LOADER
 # ==========================================
 
+# Gère la configuration de l'application (lecture de config.ini, chemins, valeurs par défaut)
 class AppConfig:
+    # Initialise les chemins/valeurs par défaut puis charge la config
     def __init__(self, config_path="config.ini"):
         self.config_path = config_path
         self.profiles_dir = "profils"
@@ -30,6 +32,7 @@ class AppConfig:
         self.command_timeout = 30
         self.load_config()
 
+    # Lit config.ini, applique les valeurs trouvées et crée les dossiers nécessaires
     def load_config(self):
         if not os.path.exists(self.config_path):
             messagebox.showerror("Erreur Configuration", f"Fichier de configuration introuvable : {self.config_path}")
@@ -54,10 +57,12 @@ class AppConfig:
         os.makedirs(self.reports_dir, exist_ok=True)
         os.makedirs(self.logs_dir, exist_ok=True)
 
+# Charge et valide les profils de poste (fichiers JSON) utilisés pour la recette
 class ProfileLoader:
     REQUIRED_KEYS = ["profile_name", "version", "validation_date", "identity", "hardware", "system", "security", "software", "environment", "printer", "logs"]
 
     @staticmethod
+    # Charge un profil JSON, vérifie les clés requises et calcule son empreinte SHA256
     def load_profile(filepath):
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Fichier profil introuvable : {filepath}")
@@ -81,6 +86,7 @@ class ProfileLoader:
 # POWERSHELL EXECUTION HELPER
 # ==========================================
 
+# Exécute une commande PowerShell cachée avec timeout et renvoie succès/sortie/erreur
 def run_powershell(cmd, timeout=30):
     """
     Exécute une commande PowerShell sécurisée avec timeout,
@@ -115,12 +121,15 @@ def run_powershell(cmd, timeout=30):
 # SYSTEM PROBES (SONDES DE COLLECTE)
 # ==========================================
 
+# Sondes de collecte : chaque méthode contrôle un point de conformité du poste
 class SystemProbes:
     @staticmethod
+    # Récupère le nom de la machine
     def get_hostname():
         return os.environ.get('COMPUTERNAME', '')
 
     @staticmethod
+    # Vérifie que le nom de machine respecte le format attendu
     def check_hostname(expected_pattern):
         actual = SystemProbes.get_hostname()
         match = re.match(expected_pattern, actual)
@@ -132,6 +141,7 @@ class SystemProbes:
         }
 
     @staticmethod
+    # Vérifie que le compte administrateur local existe et est actif
     def check_admin_account(admin_name):
         res = run_powershell(f"Get-LocalUser -Name '{admin_name}' -ErrorAction SilentlyContinue | Select-Enabled | ConvertTo-Json")
         if not res["success"]:
@@ -149,6 +159,7 @@ class SystemProbes:
             return {"expected": f"Compte {admin_name} actif", "actual": "Erreur", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Détecte les comptes locaux actifs non autorisés
     def check_unauthorized_accounts(allowed_accounts):
         res = run_powershell("Get-LocalUser | Select-Object -Property Name, Enabled | ConvertTo-Json")
         if not res["success"]:
@@ -175,6 +186,7 @@ class SystemProbes:
             return {"expected": "Comptes locaux conformes", "actual": "Erreur parsing", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie que la RAM installée atteint le minimum requis
     def check_ram(min_gb):
         res = run_powershell("(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB")
         if not res["success"]:
@@ -191,6 +203,7 @@ class SystemProbes:
             return {"expected": f">= {min_gb} Go", "actual": "Erreur", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie l'espace disque libre sur le lecteur C:
     def check_disk_free_space(min_gb):
         res = run_powershell("(Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='C:'\").FreeSpace / 1GB")
         if not res["success"]:
@@ -207,6 +220,7 @@ class SystemProbes:
             return {"expected": f">= {min_gb} Go", "actual": "Erreur", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie l'état de santé S.M.A.R.T. des disques
     def check_smart_health():
         res = run_powershell("Get-PhysicalDisk | Select-Object -Property OperationalStatus, HealthStatus | ConvertTo-Json")
         if not res["success"]:
@@ -223,6 +237,7 @@ class SystemProbes:
             return {"expected": "Healthy", "actual": "Erreur parsing", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Identifie le type de support de stockage (SSD/HDD)
     def check_media_type():
         res = run_powershell("Get-PhysicalDisk | Select-Object -Property MediaType | ConvertTo-Json")
         if not res["success"]:
@@ -237,6 +252,7 @@ class SystemProbes:
             return {"expected": "SSD/HDD", "actual": "Erreur", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie que l'édition de Windows installée correspond à celle attendue
     def check_windows_version(expected_edition):
         res = run_powershell("(Get-CimInstance Win32_OperatingSystem).Caption")
         if not res["success"]:
@@ -246,6 +262,7 @@ class SystemProbes:
         return {"expected": expected_edition, "actual": actual, "status": status, "msg": f"Édition installée : {actual}"}
 
     @staticmethod
+    # Vérifie que Windows est activé
     def check_windows_activation():
         res = run_powershell("(Get-CimInstance SoftwareLicensingProduct -Filter \"LicenseStatus=1\").Name")
         if not res["success"]:
@@ -259,6 +276,7 @@ class SystemProbes:
         }
 
     @staticmethod
+    # Vérifie la synchronisation de l'heure via le serveur NTP attendu
     def check_time_sync(expected_server, max_skew_sec):
         res = run_powershell("w32tm /query /status")
         if not res["success"]:
@@ -266,6 +284,7 @@ class SystemProbes:
         return {"expected": f"NTP : {expected_server}", "actual": "Synchronisé", "status": "Conforme", "msg": "Heure système synchronisée."}
 
     @staticmethod
+    # Vérifie que les interfaces réseau sont configurées en DHCP
     def check_dhcp_enabled():
         res = run_powershell("Get-NetIPInterface -AddressFamily IPv4 | Where-Object {$_.Dhcp -eq 'Disabled' -and $_.InterfaceAlias -notlike '*Loopback*'} | ConvertTo-Json")
         if not res["success"]:
@@ -278,6 +297,7 @@ class SystemProbes:
             return {"expected": "DHCP activé", "actual": "Erreur", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie qu'un antivirus actif est enregistré sur le poste
     def check_antivirus():
         res = run_powershell("Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct | Select-Object -Property displayName, productState | ConvertTo-Json")
         if not res["success"]:
@@ -294,6 +314,7 @@ class SystemProbes:
             return {"expected": "Antivirus actif", "actual": "Erreur", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie que les signatures antivirus Defender ne sont pas trop anciennes
     def check_av_signatures(max_age_days):
         res = run_powershell("(Get-MpComputerStatus).AntivirusSignatureAge")
         if not res["success"]:
@@ -310,6 +331,7 @@ class SystemProbes:
             return {"expected": f"<= {max_age_days} jours", "actual": "Erreur parsing", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie que le chiffrement BitLocker est activé sur le disque C:
     def check_bitlocker():
         res = run_powershell("Get-BitLockerVolume -MountPoint 'C:' | Select-Object -Property ProtectionStatus, VolumeStatus | ConvertTo-Json")
         if not res["success"]:
@@ -328,6 +350,7 @@ class SystemProbes:
             return {"expected": "Protection On", "actual": "Erreur", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie que tous les profils du pare-feu Windows sont actifs
     def check_firewall():
         res = run_powershell("Get-NetFirewallProfile | Select-Object -Property Name, Enabled | ConvertTo-Json")
         if not res["success"]:
@@ -344,6 +367,7 @@ class SystemProbes:
             return {"expected": "Profils pare-feu actifs", "actual": "Erreur", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie que le service Windows Update est démarrable/actif
     def check_wuauserv_service():
         res = run_powershell("Get-Service -Name wuauserv | Select-Object -Property Status, StartType | ConvertTo-Json")
         if not res["success"]:
@@ -363,6 +387,7 @@ class SystemProbes:
             return {"expected": "wuauserv actif", "actual": "Erreur", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Compte les mises à jour Windows en attente via l'API COM Windows Update
     def check_pending_updates(max_allowed):
         res = run_powershell("$sub = New-Object -ComObject Microsoft.Update.Session; $searcher = $sub.CreateUpdateSearcher(); $res = $searcher.Search('IsInstalled=0 and Type=\\'Software\\''); $res.Updates.Count")
         if not res["success"]:
@@ -379,6 +404,7 @@ class SystemProbes:
             return {"expected": f"<= {max_allowed} maj", "actual": "Erreur parsing", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie, via le registre, que les applications du socle requis sont installées
     def check_installed_apps(required_apps):
         installed = set()
         reg_paths = [
@@ -412,6 +438,7 @@ class SystemProbes:
         return {"expected": "Toutes applications du socle", "actual": "Toutes installées", "status": "Conforme", "msg": "Toutes les applications winget requises sont présente."}
 
     @staticmethod
+    # Détecte, via le registre, la présence de logiciels interdits
     def check_forbidden_apps(forbidden_apps):
         installed = []
         reg_paths = [
@@ -444,6 +471,7 @@ class SystemProbes:
         return {"expected": "Aucun logiciel interdit", "actual": "Aucun détecté", "status": "Conforme", "msg": "Aucun logiciel interdit trouvé."}
 
     @staticmethod
+    # Vérifie que les services requis sont démarrés
     def check_required_services(required_services):
         bad_services = []
         for srv in required_services:
@@ -465,6 +493,7 @@ class SystemProbes:
         return {"expected": "Tous services requis démarrés", "actual": "Conformes", "status": "Conforme", "msg": "Tous les services requis fonctionnent."}
 
     @staticmethod
+    # Vérifie que le pavé numérique est activé au démarrage (registre)
     def check_numlock():
         try:
             key = winreg.OpenKey(winreg.HKEY_USERS, r".DEFAULT\Control Panel\Keyboard")
@@ -475,6 +504,7 @@ class SystemProbes:
             return {"expected": "Pavé numérique actif", "actual": "Erreur Registre", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie l'affichage des extensions de fichiers et des fichiers cachés dans l'explorateur
     def check_explorer_settings():
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced")
@@ -491,6 +521,7 @@ class SystemProbes:
             return {"expected": "Extensions & cachés visibles", "actual": "Erreur Registre", "status": "Indéterminé", "msg": str(e)}
 
     @staticmethod
+    # Vérifie la page d'accueil Chrome imposée par stratégie registre
     def check_chrome_homepage(expected_url):
         try:
             key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Policies\Google\Chrome")
@@ -501,6 +532,7 @@ class SystemProbes:
             return {"expected": expected_url, "actual": "Non configurée", "status": "Écart", "msg": "Stratégie Chrome Homepage absente du registre."}
 
     @staticmethod
+    # Vérifie la présence de l'imprimante réseau attendue
     def check_printer(expected_name):
         res = run_powershell(f"Get-Printer -Name '{expected_name}' -ErrorAction SilentlyContinue | Select-Object -Property Name | ConvertTo-Json")
         if not res["success"]:
@@ -510,6 +542,7 @@ class SystemProbes:
         return {"expected": expected_name, "actual": "Absente", "status": "Écart", "msg": f"Imprimante {expected_name} introuvable."}
 
     @staticmethod
+    # Compte les événements critiques/erreurs système des dernières 24h
     def check_event_logs(max_critical_24h):
         res = run_powershell("(Get-WinEvent -FilterHashtable @{LogName='System'; Level=1,2; StartTime=(Get-Date).AddDays(-1)} -ErrorAction SilentlyContinue).Count")
         if not res["success"]:
@@ -530,8 +563,10 @@ class SystemProbes:
 # AUTOMATIC REMEDIATIONS (CORRECTIONS)
 # ==========================================
 
+# Corrections automatiques appliquées pour résorber les écarts détectés par les sondes
 class SystemRemediations:
     @staticmethod
+    # Renomme la machine (nécessite un redémarrage)
     def fix_hostname(new_hostname):
         res = run_powershell(f"Rename-Computer -NewName '{new_hostname}' -Force")
         if res["success"]:
@@ -539,6 +574,7 @@ class SystemRemediations:
         return False, f"Échec du renommage : {res['error']}", False
 
     @staticmethod
+    # Désactive un compte local non autorisé
     def fix_unauthorized_account(username):
         res = run_powershell(f"Disable-LocalUser -Name '{username}'")
         if res["success"]:
@@ -546,6 +582,7 @@ class SystemRemediations:
         return False, f"Échec désactivation {username} : {res['error']}", False
 
     @staticmethod
+    # Lance l'optimisation/défragmentation du disque C:
     def fix_media_defrag():
         res = run_powershell("Optimize-Volume -DriveLetter C -Defrag -Verbose")
         if res["success"]:
@@ -553,6 +590,7 @@ class SystemRemediations:
         return False, f"Échec optimisation : {res['error']}", False
 
     @staticmethod
+    # Reconfigure le serveur NTP et resynchronise l'heure
     def fix_time_sync(server):
         run_powershell(f"w32tm /config /manualpeerlist:'{server}' /syncfromflags:manual /reliable:YES /update")
         res = run_powershell("w32tm /resync")
@@ -561,6 +599,7 @@ class SystemRemediations:
         return False, f"Échec de la synchro temps : {res['error']}", False
 
     @staticmethod
+    # Repasse les interfaces réseau en DHCP
     def fix_dhcp():
         res = run_powershell("Get-NetIPInterface -AddressFamily IPv4 | Where-Object {$_.Dhcp -eq 'Disabled'} | Set-NetIPInterface -Dhcp Enabled; Get-NetAdapter | Set-DnsClientServerAddress -ResetServerAddresses")
         if res["success"]:
@@ -568,6 +607,7 @@ class SystemRemediations:
         return False, f"Échec remise en DHCP : {res['error']}", False
 
     @staticmethod
+    # Met à jour les signatures antivirus Defender
     def fix_av_signatures():
         res = run_powershell("Update-MpSignature")
         if res["success"]:
@@ -575,6 +615,7 @@ class SystemRemediations:
         return False, f"Échec MAJ signatures : {res['error']}", False
 
     @staticmethod
+    # Réactive tous les profils du pare-feu Windows
     def fix_firewall():
         res = run_powershell("Set-NetFirewallProfile -Profile Domain,Private,Public -Enabled True")
         if res["success"]:
@@ -582,6 +623,7 @@ class SystemRemediations:
         return False, f"Échec activation pare-feu : {res['error']}", False
 
     @staticmethod
+    # Réactive et démarre le service Windows Update
     def fix_wuauserv():
         res = run_powershell("Set-Service -Name wuauserv -StartupType Automatic; Start-Service -Name wuauserv")
         if res["success"]:
@@ -589,6 +631,7 @@ class SystemRemediations:
         return False, f"Échec réactivation wuauserv : {res['error']}", False
 
     @staticmethod
+    # Installe les mises à jour Windows en attente (avec redémarrage auto)
     def fix_pending_updates():
         res = run_powershell("Install-Module PSWindowsUpdate -Force -Confirm:$false; Get-WindowsUpdate -Install -AcceptAll -AutoReboot", timeout=300)
         if res["success"]:
@@ -596,6 +639,7 @@ class SystemRemediations:
         return False, f"Échec installation MAJ : {res['error']}", False
 
     @staticmethod
+    # Installe une application via winget en mode silencieux
     def fix_install_winget_app(app_id):
         res = run_powershell(f"winget install --id '{app_id}' --silent --accept-package-agreements --accept-source-agreements", timeout=180)
         if res["success"]:
@@ -603,6 +647,7 @@ class SystemRemediations:
         return False, f"Échec installation {app_id} : {res['error']}", False
 
     @staticmethod
+    # Configure et démarre les services requis
     def fix_services(required_services):
         errs = []
         for srv in required_services:
@@ -615,6 +660,7 @@ class SystemRemediations:
         return False, f"Erreur sur services : {', '.join(errs)}", False
 
     @staticmethod
+    # Active le pavé numérique au démarrage via le registre
     def fix_numlock():
         try:
             key = winreg.OpenKey(winreg.HKEY_USERS, r".DEFAULT\Control Panel\Keyboard", 0, winreg.KEY_SET_VALUE)
@@ -625,6 +671,7 @@ class SystemRemediations:
             return False, f"Échec écriture Registre : {str(e)}", False
 
     @staticmethod
+    # Force l'affichage des extensions de fichiers et fichiers cachés via le registre
     def fix_explorer_settings():
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
@@ -636,6 +683,7 @@ class SystemRemediations:
             return False, f"Échec écriture Registre : {str(e)}", False
 
     @staticmethod
+    # Impose la page d'accueil Chrome via une stratégie registre
     def fix_chrome_homepage(homepage_url):
         try:
             key = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Policies\Google\Chrome")
@@ -650,7 +698,9 @@ class SystemRemediations:
 # PDF REPORT GENERATOR (FPDF2)
 # ==========================================
 
+# Mise en page du PDF du procès-verbal (en-tête / pied de page)
 class PDFReportGenerator(FPDF):
+    # En-tête du PDF : titre du procès-verbal
     def header(self):
         self.set_font('Helvetica', 'B', 14)
         self.cell(0, 10, 'EXPERTY - PROCÈS-VERBAL DE RECETTE SYSTEME', border=False, ln=1, align='C')
@@ -658,11 +708,13 @@ class PDFReportGenerator(FPDF):
         self.cell(0, 5, 'Conformité du poste de travail déployé', border=False, ln=1, align='C')
         self.ln(5)
 
+    # Pied de page du PDF : numéro de page
     def footer(self):
         self.set_y(-15)
         self.set_font('Helvetica', 'I', 8)
         self.cell(0, 10, f'Page {self.page_no()}/{{nb}} - Document confidentiel EXPERTY', align='C')
 
+# Génère le PDF du procès-verbal de recette à partir des résultats de la session
 def generate_pdf_pv(session_data: Dict[str, Any], filepath: str) -> None:
     pdf = PDFReportGenerator()
     pdf.alias_nb_pages()
@@ -745,6 +797,7 @@ def generate_pdf_pv(session_data: Dict[str, Any], filepath: str) -> None:
 # CATALOG OF CONTROLS (F3)
 # ==========================================
 
+# Catalogue des contrôles de recette, regroupés par domaine (identité, matériel, système, sécurité, logiciels, environnement, journaux)
 CATALOG = [
     # Identité
     {"id": "ID_01", "domain": "Identité", "label": "Nom de machine conforme (PC-EXP-nnn)", "severity": "Majeur", "mode": "Automatique"},
@@ -784,6 +837,7 @@ CATALOG = [
 # MAIN GUI APPLICATION (TKINTER)
 # ==========================================
 
+# Fenêtre principale de l'application (interface Tkinter de la recette des postes)
 class ExpertyAuditApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -807,12 +861,14 @@ class ExpertyAuditApp(tk.Tk):
         self.load_default_profile()
         self.after(100, self.process_queue)
 
+    # Vérifie si l'application s'exécute avec les droits administrateur
     def check_admin_rights(self):
         try:
             return ctypes.windll.shell32.IsUserAnAdmin() != 0
         except Exception:
             return False
 
+    # Configure la journalisation de session dans un fichier log
     def setup_logging(self):
         log_file = os.path.join(self.app_config.logs_dir, f"audit_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
         logging.basicConfig(
@@ -823,6 +879,7 @@ class ExpertyAuditApp(tk.Tk):
         )
         logging.info("Application démarrée.")
 
+    # Construit la barre de menu (Fichier, Recette, Affichage, Aide)
     def create_menu(self):
         menubar = tk.Menu(self)
         
@@ -858,6 +915,7 @@ class ExpertyAuditApp(tk.Tk):
 
         self.config(menu=menubar)
 
+    # Construit l'interface graphique : bandeau de session, onglets de résultats, panneau de détail, barre d'état
     def create_widgets(self):
         # 1. BANDEAU HAUT
         top_frame = ttk.LabelFrame(self, text=" Session de Recette ")
@@ -952,6 +1010,7 @@ class ExpertyAuditApp(tk.Tk):
     # CORE LOGIC & THREADING
     # ==========================================
 
+    # Liste les profils disponibles et charge le profil par défaut
     def load_default_profile(self):
         profiles = [f for f in os.listdir(self.app_config.profiles_dir) if f.endswith('.json')]
         self.cb_profiles['values'] = profiles
@@ -961,6 +1020,7 @@ class ExpertyAuditApp(tk.Tk):
             self.cb_profiles.set(profiles[0])
         self.on_profile_selected(None)
 
+    # Charge le profil sélectionné et réinitialise les tableaux de résultats
     def on_profile_selected(self, event):
         selected = self.cb_profiles.get()
         if not selected:
@@ -974,6 +1034,7 @@ class ExpertyAuditApp(tk.Tk):
             messagebox.showerror("Erreur Profil", f"Impossible de charger le profil :\n{str(e)}")
             logging.error(f"Erreur chargement profil {selected}: {str(e)}")
 
+    # Vide et réinitialise les tableaux de contrôles avec les lignes du catalogue
     def reset_tables(self):
         for tree in self.tables.values():
             for item in tree.get_children():
@@ -995,6 +1056,7 @@ class ExpertyAuditApp(tk.Tk):
             tid_dom = self.tables[dom].insert("", tk.END, iid=cid, values=item_data, tags=("NonEvalué",))
             tid_syn = self.tables["Synthèse"].insert("", tk.END, iid=f"syn_{cid}", values=item_data, tags=("NonEvalué",))
 
+    # Lance la recette complète dans un thread séparé
     def start_full_audit(self):
         if self.audit_running:
             return
@@ -1008,6 +1070,7 @@ class ExpertyAuditApp(tk.Tk):
 
         threading.Thread(target=self._worker_run_audit, daemon=True).start()
 
+    # Exécute les contrôles en arrière-plan et pousse les résultats dans la file de messages UI
     def _worker_run_audit(self, target_ids=None):
         active_controls = CATALOG if not target_ids else [c for c in CATALOG if c["id"] in target_ids]
         total = len(active_controls)
@@ -1019,6 +1082,7 @@ class ExpertyAuditApp(tk.Tk):
 
         self.worker_queue.put(("AUDIT_COMPLETE", None, None, 100))
 
+    # Exécute la sonde correspondant à un contrôle donné (ou renvoie 'désactivé' selon le profil)
     def evaluate_control(self, ctrl):
         cid = ctrl["id"]
         prof = self.current_profile
@@ -1063,6 +1127,7 @@ class ExpertyAuditApp(tk.Tk):
 
         return {"expected": "-", "actual": "-", "status": "Indéterminé", "msg": "Sonde non implémentée"}
 
+    # Traite la file des résultats venant du thread d'audit et met à jour l'UI (polling)
     def process_queue(self):
         try:
             while True:
@@ -1079,6 +1144,7 @@ class ExpertyAuditApp(tk.Tk):
             pass
         self.after(100, self.process_queue)
 
+    # Met à jour la ligne de résultat d'un contrôle dans les tableaux
     def update_control_row(self, cid, res):
         self.results_data[cid] = res
         ctrl_info = next(c for c in CATALOG if c["id"] == cid)
@@ -1097,6 +1163,7 @@ class ExpertyAuditApp(tk.Tk):
 
         self.update_tab_titles()
 
+    # Met à jour le titre des onglets avec le nombre d'écarts par domaine
     def update_tab_titles(self):
         for dom in self.domains:
             if dom == "Synthèse":
@@ -1111,6 +1178,7 @@ class ExpertyAuditApp(tk.Tk):
             title = f"{dom} ({ecarts})" if ecarts > 0 else dom
             self.notebook.tab(idx, text=title)
 
+    # Calcule le verdict global de conformité selon les règles RG03
     def calculate_global_verdict(self):
         vert = 0
         rouge = 0
@@ -1157,6 +1225,7 @@ class ExpertyAuditApp(tk.Tk):
     # GUI ACTIONS & CORRECTIONS
     # ==========================================
 
+    # Affiche le détail du contrôle sélectionné et active/désactive les boutons d'action
     def on_tree_select(self, event):
         tree = event.widget
         selected = tree.selection()
@@ -1182,6 +1251,7 @@ class ExpertyAuditApp(tk.Tk):
         else:
             self.btn_fix.config(state=tk.DISABLED)
 
+    # Déclenche la correction automatique du contrôle sélectionné (avec confirmation, RG01)
     def action_fix_single(self):
         curr_tab = self.notebook.tab(self.notebook.select(), "text").split(" ")[0]
         tree = self.tables.get(curr_tab, self.tables["Synthèse"])
@@ -1253,6 +1323,7 @@ class ExpertyAuditApp(tk.Tk):
         else:
             messagebox.showinfo("Résultat Correction", msg)
 
+    # Relance la sonde du contrôle sélectionné pour rafraîchir son statut
     def action_recheck_single(self):
         curr_tab = self.notebook.tab(self.notebook.select(), "text").split(" ")[0]
         tree = self.tables.get(curr_tab, self.tables["Synthèse"])
@@ -1267,6 +1338,7 @@ class ExpertyAuditApp(tk.Tk):
         self.update_control_row(cid, res)
         self.calculate_global_verdict()
 
+    # Relance uniquement les contrôles en écart ou indéterminés
     def start_replay_audit(self):
         ecarts = [cid for cid, r in self.results_data.items() if r.get("status") in ["Écart", "Indéterminé"]]
         if not ecarts:
@@ -1277,6 +1349,7 @@ class ExpertyAuditApp(tk.Tk):
         self.btn_start.config(state=tk.DISABLED)
         threading.Thread(target=self._worker_run_audit, args=(ecarts,), daemon=True).start()
 
+    # Affiche les données brutes collectées dans une fenêtre dédiée
     def action_raw_collect(self):
         top = tk.Toplevel(self)
         top.title("Collecte Brute du Poste")
@@ -1285,6 +1358,7 @@ class ExpertyAuditApp(tk.Tk):
         txt.pack(fill=tk.BOTH, expand=True)
         txt.insert(tk.END, json.dumps(self.results_data, indent=2, ensure_ascii=False))
 
+    # Génère le procès-verbal PDF à partir des résultats actuels
     def action_generate_pv(self):
         if not self.results_data:
             messagebox.showwarning("Erreur PV", "Veuillez exécuter la recette avant de générer le PV.")
@@ -1322,6 +1396,7 @@ class ExpertyAuditApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("Erreur PV", f"Échec de génération du PDF :\n{str(e)}")
 
+    # Filtre l'affichage des tableaux (tout / écarts seulement / indéterminés seulement)
     def filter_display(self, mode):
         for tree in self.tables.values():
             for child in tree.get_children():
@@ -1334,16 +1409,20 @@ class ExpertyAuditApp(tk.Tk):
                 elif mode == "INDETERMINE" and st != "Indéterminé":
                     tree.detach(child)
 
+    # Donne le focus au sélecteur de profil
     def action_choose_profile(self):
         self.cb_profiles.focus()
 
+    # Recharge la configuration depuis config.ini
     def action_reload_config(self):
         self.app_config = AppConfig()
         messagebox.showinfo("Configuration", "Configuration INI rechargée.")
 
+    # Ouvre le dossier contenant les PV générés
     def action_open_pv_folder(self):
         os.startfile(os.path.abspath(self.app_config.reports_dir))
 
+    # Affiche la boîte « À propos »
     def action_about(self):
         prof_info = f"{self.current_profile['profile_name']} v{self.current_profile['version']}" if self.current_profile else "Aucun"
         messagebox.showinfo(
@@ -1351,6 +1430,7 @@ class ExpertyAuditApp(tk.Tk):
             f"Application de Recette des Postes EXPERTY\nVersion 2026.1\n\nProfil chargé : {prof_info}\nEmpreinte SHA256 : {self.current_profile_hash[:16]}...\nPrivilèges Administrateur : {'OUI' if self.is_admin else 'NON'}"
         )
 
+    # Quitte l'application (refusé si un audit est en cours)
     def action_quit(self):
         if self.audit_running:
             messagebox.showwarning("Action impossible", "Impossible de quitter pendant l'exécution d'une recette.")
@@ -1361,6 +1441,7 @@ class ExpertyAuditApp(tk.Tk):
 # APPLICATION ENTRY POINT
 # ==========================================
 
+# Point d'entrée : instancie et lance l'application
 def main():
     app = ExpertyAuditApp()
     app.mainloop()
